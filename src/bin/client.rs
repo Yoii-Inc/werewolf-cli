@@ -1,12 +1,18 @@
 use std::io::{self, Write};
-use werewolf_cli::game::{player::Player, role::Role, Game};
+use werewolf_cli::game::{player::Player, role::Role, Game, GameRules};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let stream = TcpStream::connect("127.0.0.1:8080").await?;
     // println!("サーバーに接続しました。");
 
-    let mut game = Game::new(register_players());
+    let game_rule = GameRules {
+        min_players: 4,
+        max_players: 10,
+        werewolf_ratio: 0.3,
+        seer_count: 1,
+    };
+    let mut game = Game::new(register_players(), game_rule);
 
     loop {
         night_phase(&mut game);
@@ -51,7 +57,7 @@ fn register_players() -> Vec<String> {
 
 fn night_phase(game: &mut Game) {
     println!("\n--- 夜のフェーズ ---");
-    let players = game.players.clone();
+    let players = game.state.players.clone();
     for player in &players {
         if player.is_alive {
             let mut events = Vec::new();
@@ -97,7 +103,8 @@ fn get_werewolf_target(game: &Game, werewolf: &Player) -> usize {
         "{}さん、あなたは人狼です。襲撃する対象を選んでください：",
         werewolf.name
     );
-    game.players
+    game.state
+        .players
         .iter()
         .filter(|p| p.is_alive && !p.is_werewolf())
         .for_each(|p| println!("{}: {}", p.id, p.name));
@@ -111,6 +118,7 @@ fn get_werewolf_target(game: &Game, werewolf: &Player) -> usize {
         let target_id: usize = input.trim().parse().unwrap_or(0);
 
         if game
+            .state
             .players
             .iter()
             .any(|p| p.id == target_id && p.is_alive && !p.is_werewolf())
@@ -127,7 +135,8 @@ fn get_seer_target(game: &Game, seer: &Player) -> usize {
         "{}さん、あなたは占い師です。占う対象を選んでください：",
         seer.name
     );
-    game.players
+    game.state
+        .players
         .iter()
         .filter(|p| p.is_alive && p.id != seer.id)
         .for_each(|p| println!("{}: {}", p.id, p.name));
@@ -141,6 +150,7 @@ fn get_seer_target(game: &Game, seer: &Player) -> usize {
         let target_id: usize = input.trim().parse().unwrap_or(0);
 
         if game
+            .state
             .players
             .iter()
             .any(|p| p.id == target_id && p.is_alive && p.id != seer.id)
@@ -167,7 +177,8 @@ fn discussion_phase(game: &Game) {
     }
 
     println!("生存しているプレイヤー：");
-    game.players
+    game.state
+        .players
         .iter()
         .filter(|p| p.is_alive)
         .for_each(|p| println!("{}: {}", p.id, p.name));
@@ -181,10 +192,11 @@ fn voting_phase(game: &mut Game) {
     println!("\n--- 投票フェーズ ---");
     let mut votes = Vec::new();
 
-    for player in &game.players {
+    for player in &game.state.players {
         if player.is_alive {
             println!("{}さん、投票する対象を選んでください：", player.name);
-            game.players
+            game.state
+                .players
                 .iter()
                 .filter(|p| p.is_alive && p.id != player.id)
                 .for_each(|p| println!("{}: {}", p.id, p.name));
@@ -198,6 +210,7 @@ fn voting_phase(game: &mut Game) {
                 let target_id: usize = input.trim().parse().unwrap_or(usize::MAX);
 
                 if game
+                    .state
                     .players
                     .iter()
                     .any(|p| p.id == target_id && p.is_alive && p.id != player.id)

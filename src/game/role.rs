@@ -2,6 +2,8 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 
+use super::GameRules;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Villager,
@@ -23,15 +25,12 @@ impl Role {
     }
 }
 
-pub fn assign_roles(player_count: usize) -> Vec<Role> {
+pub fn assign_roles(player_count: usize, rules: &GameRules) -> Vec<Role> {
     let mut roles = vec![Role::Villager; player_count];
     let mut rng = thread_rng();
 
-    // 人狼の数を決定（プレイヤー数の1/3程度）
-    let werewolf_count = (player_count / 3).max(1);
-
-    // 占い師は1人
-    let seer_count = 1;
+    let werewolf_count = (player_count as f32 * rules.werewolf_ratio).round() as usize;
+    let seer_count = rules.seer_count;
 
     // 役割を割り当てる
     for role in roles.iter_mut().take(werewolf_count) {

@@ -7,9 +7,21 @@ use player::Player;
 use role::Role;
 
 pub struct Game {
+    pub state: GameState,
+    pub rules: GameRules,
+}
+
+pub struct GameState {
     pub players: Vec<Player>,
     pub current_phase: GamePhase,
     pub day: u32,
+}
+
+pub struct GameRules {
+    pub min_players: usize,
+    pub max_players: usize,
+    pub werewolf_ratio: f32,
+    pub seer_count: usize,
 }
 
 pub enum GamePhase {
@@ -20,31 +32,35 @@ pub enum GamePhase {
 }
 
 impl Game {
-    pub fn new(player_names: Vec<String>) -> Self {
-        let roles = role::assign_roles(player_names.len());
+    pub fn new(player_names: Vec<String>, rules: GameRules) -> Self {
+        let roles = role::assign_roles(player_names.len(), &rules);
         let players = player::create_players(player_names, roles);
 
         Self {
-            players,
-            current_phase: GamePhase::Night,
-            day: 1,
+            state: GameState {
+                players,
+                current_phase: GamePhase::Night,
+                day: 1,
+            },
+            rules,
         }
     }
 
     pub fn next_phase(&mut self) {
-        self.current_phase = match self.current_phase {
+        self.state.current_phase = match self.state.current_phase {
             GamePhase::Night => GamePhase::Morning,
             GamePhase::Morning => GamePhase::Discussion,
             GamePhase::Discussion => GamePhase::Voting,
             GamePhase::Voting => {
-                self.day += 1;
+                self.state.day += 1;
                 GamePhase::Night
             }
         };
     }
 
     pub fn check_victory_condition(&self) -> Option<String> {
-        let alive_players: Vec<&Player> = self.players.iter().filter(|p| p.is_alive).collect();
+        let alive_players: Vec<&Player> =
+            self.state.players.iter().filter(|p| p.is_alive).collect();
         let werewolf_count = alive_players.iter().filter(|p| p.is_werewolf()).count();
         let villager_count = alive_players.len() - werewolf_count;
 
@@ -60,13 +76,19 @@ impl Game {
     pub fn werewolf_attack(&mut self, target_id: usize) -> Vec<String> {
         let mut events = Vec::new();
 
-        if let Some(_werewolf) = self.players.iter().find(|p| p.is_werewolf() && p.is_alive) {
+        if let Some(_werewolf) = self
+            .state
+            .players
+            .iter()
+            .find(|p| p.is_werewolf() && p.is_alive)
+        {
             if let Some(target) = self
+                .state
                 .players
                 .iter_mut()
                 .find(|p| p.id == target_id && p.is_alive && !p.is_werewolf())
             {
-                target.kill(self.day);
+                target.kill(self.state.day);
                 events.push(format!("人狼が{}を襲撃しました。", target.name));
             } else {
                 events.push("無効な襲撃対象が選択されました。".to_string());
@@ -80,11 +102,13 @@ impl Game {
         let mut events = Vec::new();
 
         if let Some(seer) = self
+            .state
             .players
             .iter()
             .find(|p| p.role == Role::Seer && p.is_alive)
         {
             if let Some(target) = self
+                .state
                 .players
                 .iter()
                 .find(|p| p.id == target_id && p.is_alive && p.id != seer.id)
@@ -111,9 +135,10 @@ impl Game {
 
         // 夜に襲撃されたプレイヤーの処理
         let killed_players: Vec<&Player> = self
+            .state
             .players
             .iter()
-            .filter(|p| !p.is_alive && p.death_day == Some(self.day))
+            .filter(|p| !p.is_alive && p.death_day == Some(self.state.day))
             .collect();
 
         if killed_players.is_empty() {
@@ -133,14 +158,14 @@ impl Game {
 
     pub fn voting_phase(&mut self, votes: Vec<usize>) -> Vec<String> {
         let mut events = Vec::new();
-        let mut vote_count = vec![0; self.players.len()];
+        let mut vote_count = vec![0; self.state.players.len()];
 
-        for (voter, &target) in self.players.iter().zip(votes.iter()) {
+        for (voter, &target) in self.state.players.iter().zip(votes.iter()) {
             if voter.is_alive {
                 vote_count[target] += 1;
                 events.push(format!(
                     "{}が{}に投票しました。",
-                    voter.name, self.players[target].name
+                    voter.name, self.state.players[target].name
                 ));
             }
         }
@@ -148,6 +173,7 @@ impl Game {
         let max_votes = *vote_count.iter().max().unwrap();
         // 最大票数を持つプレイヤーを見つける。投票が同数の場合は
         let max_voted_indexes = self
+            .state
             .players
             .iter()
             .enumerate()
@@ -168,10 +194,26 @@ impl Game {
             max_voted_indexes[random_index]
         };
 
-        let player = &mut self.players[executed_index];
-        player.kill(self.day);
+        let player = &mut self.state.players[executed_index];
+        player.kill(self.state.day);
         events.push(format!("{}が処刑されました。", player.name));
 
         events
+    }
+}
+
+impl GameRules {
+    pub fn new(
+        min_players: usize,
+        max_players: usize,
+        werewolf_ratio: f32,
+        seer_count: usize,
+    ) -> Self {
+        Self {
+            min_players,
+            max_players,
+            werewolf_ratio,
+            seer_count,
+        }
     }
 }
