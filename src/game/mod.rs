@@ -88,8 +88,8 @@ impl Game {
                 .iter_mut()
                 .find(|p| p.id == target_id && p.is_alive && !p.is_werewolf())
             {
-                target.kill(self.state.day);
-                events.push(format!("人狼が{}を襲撃しました。", target.name));
+                target.mark_for_death();
+                events.push(format!("人狼が{}を襲撃対象に選びました。", target.name));
             } else {
                 events.push("無効な襲撃対象が選択されました。".to_string());
             }
@@ -133,20 +133,16 @@ impl Game {
     pub fn morning_phase(&mut self) -> Vec<String> {
         let mut events = Vec::new();
 
-        // 夜に襲撃されたプレイヤーの処理
-        let killed_players: Vec<&Player> = self
-            .state
-            .players
-            .iter()
-            .filter(|p| !p.is_alive && p.death_day == Some(self.state.day))
-            .collect();
-
-        if killed_players.is_empty() {
-            events.push("昨夜は誰も襲撃されませんでした。".to_string());
-        } else {
-            for player in killed_players {
+        for player in &mut self.state.players {
+            if player.marked_for_death && player.is_alive {
+                player.kill(self.state.day);
                 events.push(format!("{}が無残な姿で発見されました。", player.name));
+                player.marked_for_death = false;
             }
+        }
+
+        if events.is_empty() {
+            events.push("昨夜は誰も襲撃されませんでした。".to_string());
         }
 
         events

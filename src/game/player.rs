@@ -8,6 +8,7 @@ pub struct Player {
     pub role: Role,
     pub is_alive: bool,
     pub death_day: Option<u32>,
+    pub marked_for_death: bool,
 }
 
 impl Player {
@@ -18,6 +19,7 @@ impl Player {
             role,
             is_alive: true,
             death_day: None,
+            marked_for_death: false,
         }
     }
 
@@ -28,6 +30,10 @@ impl Player {
 
     pub fn is_werewolf(&self) -> bool {
         self.role.is_werewolf()
+    }
+
+    pub fn mark_for_death(&mut self) {
+        self.marked_for_death = true;
     }
 }
 
